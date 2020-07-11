@@ -15,10 +15,7 @@ library(sf)
 library(flexdashboard)
 library(mapview)
 library(gt)
-library(cowplot)
-library(plotly)
-
-theme_set(theme_cowplot())
+library(kableExtra)
 ```
 
 
@@ -92,11 +89,11 @@ grampian_index %>%
 
 grampian_index <-
 grampian_index %>%
-  mutate(decile_overcrowded = ntile(overcrowded_rate, 100),
-         decile_essential = ntile(perc_essential, 100),
-         decile_density = ntile(pop_per_km2, 100),
-         sum_decile_score = decile_overcrowded + decile_essential + decile_density,
-         decile_score_decile = ntile(sum_decile_score, 10))
+  mutate(percentile_overcrowded = ntile(overcrowded_rate, 100),
+         percentile_essential = ntile(perc_essential, 100),
+         percentile_density = ntile(pop_per_km2, 100),
+         sum_percentile_score = percentile_overcrowded + percentile_essential + percentile_density,
+         sum_score_decile = ntile(sum_percentile_score, 10))
 
 ```
 
@@ -132,7 +129,7 @@ Row
 aberdeen_sf %>%
   mapview(
     map.types = "OpenStreetMap",
-    zcol = "decile_score_decile", 
+    zcol = "sum_score_decile", 
     label = aberdeen_sf$Name,
     layer.name = "",
     alpha.regions = 0.8
@@ -146,9 +143,9 @@ aberdeen_sf %>%
 #areas with highest scores
 
 aberdeen %>%
-  select(Data_Zone, DZname, Total_population, decile_score_decile, sum_decile_score) %>%
-  filter(decile_score_decile == 10) %>%
-  arrange(desc(sum_decile_score)) %>%
+  select(Data_Zone, DZname, Total_population, sum_score_decile, sum_percentile_score) %>%
+  filter(sum_score_decile == 10) %>%
+  arrange(desc(sum_percentile_score)) %>%
   gt() %>%
   tab_header(
     title = "Areas with least ability to social distance", 
@@ -157,11 +154,25 @@ aberdeen %>%
     Data_Zone = "Data Zone",
     DZname = "Name", 
     Total_population = "Population", 
-    decile_score_decile = "Distancing score",
-    sum_decile_score = "Total points")  %>%
+    sum_score_decile = "Distancing score",
+    sum_percentile_score = "Total points")  %>%
   tab_options(container.height = 400)
 ```
 
+Row
+-------------------------------------
+
+### Methods 
+
+The Social Distancing Score ranks the regions in Aberdeen where people will find it most difficult to socially distance. 
+
+The Social Distancing Score uses three measures: percent of working people employed in essential occupations, percent of people living in overcrowded homes, and high local population density. 
+
+Aberdeen is divided into 283 areas (called data zones) of roughly equal population. Each area in Aberdeen has been given a score of 1 to 10 based on the populations' essential occupations, overcrowding, and population density. 
+
+Essential occupations were defined as: manufacturing, construction, wholesale and retail trade, accomodation and food services, education, health and social care. 
+
+For each measure, data zones were scored using their percentile rank in Aberdeen. The total score was then the decile of the summed percentiles. All scores are given in the Scores tab here. All raw data and code for calculating measures are given in the Sources tab here. 
 
 
 Essential Jobs
@@ -190,7 +201,7 @@ aberdeen_sf %>%
 #areas with most people in essential occupations
 
 aberdeen %>%
-  select(Data_Zone, DZname, Total_population, perc_essential, decile_score_decile) %>%
+  select(Data_Zone, DZname, Total_population, perc_essential, sum_score_decile) %>%
   filter(perc_essential >= 65) %>%
   arrange(desc(perc_essential)) %>%
   gt() %>%
@@ -202,7 +213,7 @@ aberdeen %>%
     Data_Zone = "Data Zone",
     DZname = "Name", 
     Total_population = "Population", 
-    decile_score_decile = "Distancing score",
+    sum_score_decile = "Distancing score",
     perc_essential = "Essential workers (%)")  %>%
   tab_options(container.height = 400)
 ```
@@ -234,7 +245,7 @@ aberdeen_sf %>%
 #areas with most people per square kilometer
 
 aberdeen %>%
-  select(Data_Zone, DZname, Total_population, pop_per_km2, decile_score_decile) %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
   filter(pop_per_km2 >= 10000) %>%
   arrange(desc(pop_per_km2)) %>%
   gt() %>%
@@ -246,7 +257,7 @@ aberdeen %>%
     Data_Zone = "Data Zone",
     DZname = "Name", 
     Total_population = "Population", 
-    decile_score_decile = "Distancing score",
+    sum_score_decile = "Distancing score",
     pop_per_km2 = "people/km2")  %>%
   tab_options(container.height = 400)
 ```
@@ -278,7 +289,7 @@ aberdeen_sf %>%
 #areas with most people living in overcrowded homes
 
 aberdeen %>%
-  select(Data_Zone, DZname, Total_population, overcrowded_rate, decile_score_decile) %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, sum_score_decile) %>%
   filter(overcrowded_rate >= 25) %>%
   arrange(desc(overcrowded_rate)) %>%
   gt() %>%
@@ -290,8 +301,29 @@ aberdeen %>%
     Data_Zone = "Data Zone",
     DZname = "Name", 
     Total_population = "Population", 
-    decile_score_decile = "Distancing score",
+    sum_score_decile = "Distancing score",
     overcrowded_rate = "overcrowded (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+Scores
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+
+```{r}
+#scores table
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, percentile_overcrowded, pop_per_km2, percentile_density, perc_essential, percentile_essential, sum_score_decile, sum_percentile_score, SIMD2020v2_Decile) %>%
+  arrange(desc(sum_percentile_score)) %>%
+  clean_names() %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2, perc_essential), decimals = 0) %>%
   tab_options(container.height = 400)
 ```
 
@@ -303,16 +335,19 @@ Row
 -------------------------------------
 ###
 
-Overcrowding from Scottish Index of Multiple Deprivation 2020 (SIMD)
+This work was inspired by the Colorado Social Distancing Index created by the Colorado Health Institute
+https://www.coloradohealthinstitute.org/research/colorado-covid-19-social-distancing-index
+
+Overcrowding data from Scottish Index of Multiple Deprivation 2020 (SIMD)
 https://www.gov.scot/collections/scottish-index-of-multiple-deprivation-2020/
 
-Population density from 2011 Scotland Data Zones
+Population density from the 2011 Scotland Data Zones
 Data and shapefiles from https://data.gov.uk/dataset/ab9f1f20-3b7f-4efa-9bd2-239acf63b540/data-zone-boundaries-2011
 
-Occupations from 2011 Census
+Occupations from the 2011 Census
 https://www.scotlandscensus.gov.uk/ods-web/data-warehouse.html
 File QS605SC
 
-Code at https://github.com/JessButler/social_distancing
+All data and analytic code are at https://github.com/JessButler/social_distancing
 
 
