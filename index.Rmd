@@ -1,0 +1,318 @@
+---
+title: "Social Distancing in Aberdeen"
+
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(tidyverse)
+library(janitor)
+library(sf)
+library(flexdashboard)
+library(mapview)
+library(gt)
+library(cowplot)
+library(plotly)
+
+theme_set(theme_cowplot())
+```
+
+
+```{r}
+#load data and shapefiles 
+
+simd_zones <- read_csv(here("data", "SIMD+2020v2+-+datazone+lookup.csv"))
+
+simd_indicators <- read_csv(here("data", "SIMD2020v2_indicators.csv"))
+
+datazone_sf <- st_read(here("data", "sc_dz_11.shp"), quiet = T)
+
+occupations <- read_csv(here("data", "SNS Data Zone 2011 blk", "QS605SC.csv")) %>%
+  clean_names()
+
+#add columns with all occupations as percentages
+occupations <-
+occupations %>%
+  mutate(
+    across(
+      a_agriculture_forestry_and_fishing:u_activities_of_extraterritorial_organisations_and_bodies,
+      ~ .x/all_people_aged_16_to_74_in_employment *100, 
+      .names = "perc_{col}"))
+
+```
+
+
+```{r}
+#join SIMD files
+#remove "%" and "*" and make numeric
+
+simd <- full_join(simd_indicators, simd_zones, by = c("Data_Zone" = "DZ"))
+
+simd <- full_join(simd, occupations, by = c("Data_Zone" = "x1"))
+
+simd <- 
+simd %>%
+  mutate(across(everything(), ~ str_remove_all(., "%")),
+         across(everything(), ~ str_remove_all(., "\\*")),
+         across(Total_population:nocentralheat_rate, ~ as.numeric(.)),
+         across(SIMD2020v2_Rank:Working_Age_Population, ~ as.numeric(.)),
+         across(all_people_aged_16_to_74_in_employment:perc_u_activities_of_extraterritorial_organisations_and_bodies, ~ as.numeric(.)))
+
+datazone_sf <-
+datazone_sf %>% mutate(pop_per_km2 = TotPop2011/StdAreaKm2, 0)
+
+#adds population density back in simd file from the shapefile
+simd <-
+datazone_sf %>%
+  st_drop_geometry() %>%
+  select(DataZone, pop_per_km2) %>%
+  left_join(simd, ., by = c("Data_Zone" = "DataZone"))
+
+# create index
+#define essential jobs more narrowly????
+
+grampian_index <-
+simd %>%
+  filter(HBname == "Grampian") %>%
+  mutate(
+    perc_essential = perc_c_manufacturing + perc_f_construction + perc_g_wholesale_and_retail_trade_repair_of_motor_vehicles_and_motorcycles + perc_i_accommodation_and_food_service_activities + perc_p_education + perc_q_human_health_and_social_work_activities,
+         perc_working_age = Working_age_population/Total_population * 100) %>%
+  select(Data_Zone, DZname, Council_area, Total_population, perc_working_age, SIMD2020v2_Rank, SIMD2020v2_Decile, overcrowded_rate, pop_per_km2, perc_essential)
+
+grampian_index <-
+grampian_index %>%
+  mutate(scale_overcrowded = overcrowded_rate/max(overcrowded_rate) *10,
+         scale_density = pop_per_km2/max(pop_per_km2) *10,
+         scale_essential = perc_essential/max(perc_essential) *10,
+         sum_scaled_score = scale_overcrowded + scale_density + scale_essential)
+
+grampian_index <-
+grampian_index %>%
+  mutate(decile_overcrowded = ntile(overcrowded_rate, 100),
+         decile_essential = ntile(perc_essential, 100),
+         decile_density = ntile(pop_per_km2, 100),
+         sum_decile_score = decile_overcrowded + decile_essential + decile_density,
+         decile_score_decile = ntile(sum_decile_score, 10))
+
+```
+
+
+```{r}
+#select Aberdeen City areas' data 
+#join to shapefile
+
+aberdeen <-
+  grampian_index %>%
+  filter(Council_area == "Aberdeen City")
+
+aberdeen_data_zones <- pull(aberdeen, Data_Zone)
+
+aberdeen_sf <- filter(datazone_sf, DataZone %in% aberdeen_data_zones)
+
+aberdeen_sf <-
+  merge(aberdeen_sf, aberdeen, by.x = "DataZone", by.y = "Data_Zone")
+
+```
+
+
+
+Social Distancing Score
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "decile_score_decile", 
+    label = aberdeen_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with highest scores
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, decile_score_decile, sum_decile_score) %>%
+  filter(decile_score_decile == 10) %>%
+  arrange(desc(sum_decile_score)) %>%
+  gt() %>%
+  tab_header(
+    title = "Areas with least ability to social distance", 
+    subtitle = "Data zones scoring in the top 10% for difficulty social distancing") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    decile_score_decile = "Distancing score",
+    sum_decile_score = "Total points")  %>%
+  tab_options(container.height = 400)
+```
+
+
+
+Essential Jobs
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "perc_essential", 
+    label = aberdeen_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people in essential occupations
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, perc_essential, decile_score_decile) %>%
+  filter(perc_essential >= 65) %>%
+  arrange(desc(perc_essential)) %>%
+  gt() %>%
+  fmt_number(columns = vars(perc_essential), decimals = 0) %>%
+  tab_header(
+    title = "Areas with most people in essential occupations", 
+    subtitle = "Data zones with at least 65% of population in essential occupations") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    decile_score_decile = "Distancing score",
+    perc_essential = "Essential workers (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+
+Densest Areas
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = aberdeen_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, decile_score_decile) %>%
+  filter(pop_per_km2 >= 10000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Areas with most people per km2", 
+    subtitle = "Data zones with at least 10,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    decile_score_decile = "Distancing score",
+    pop_per_km2 = "people/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+
+Overcrowded homes
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "overcrowded_rate", 
+    label = aberdeen_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people living in overcrowded homes
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, decile_score_decile) %>%
+  filter(overcrowded_rate >= 25) %>%
+  arrange(desc(overcrowded_rate)) %>%
+  gt() %>%
+  fmt_number(columns = vars(overcrowded_rate), decimals = 0) %>%
+  tab_header(
+    title = "Areas with most people living in overcrowded homes", 
+    subtitle = "Data zones with at least 25% people in overcrowded homes") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    decile_score_decile = "Distancing score",
+    overcrowded_rate = "overcrowded (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+
+Sources
+=====================================
+
+Row
+-------------------------------------
+###
+
+Overcrowding from Scottish Index of Multiple Deprivation 2020 (SIMD)
+https://www.gov.scot/collections/scottish-index-of-multiple-deprivation-2020/
+
+Population density from 2011 Scotland Data Zones
+Data and shapefiles from https://data.gov.uk/dataset/ab9f1f20-3b7f-4efa-9bd2-239acf63b540/data-zone-boundaries-2011
+
+Occupations from 2011 Census
+https://www.scotlandscensus.gov.uk/ods-web/data-warehouse.html
+File QS605SC
+
+Code at https://github.com/JessButler/social_distancing
+
+
