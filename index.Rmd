@@ -20,7 +20,7 @@ library(kableExtra)
 
 
 ```{r}
-#load data and shapefiles 
+#load data and shapefile
 
 simd_zones <- read_csv(here("data", "SIMD+2020v2+-+datazone+lookup.csv"))
 
@@ -258,7 +258,7 @@ aberdeen %>%
     DZname = "Name", 
     Total_population = "Population", 
     sum_score_decile = "Distancing score",
-    pop_per_km2 = "people/km2")  %>%
+    pop_per_km2 = "People/km2")  %>%
   tab_options(container.height = 400)
 ```
 
