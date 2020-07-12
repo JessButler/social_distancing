@@ -420,7 +420,7 @@ aberdeen %>%
   gt() %>%
   fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
   tab_header(
-    title = "Areas with most people per km2", 
+    title = "Aberdeen areas with most people per km2", 
     subtitle = "Data zones with at least 10,000/km2") %>%
   cols_label(
     Data_Zone = "Data Zone",
@@ -551,7 +551,7 @@ aberdeen %>%
     DZname = "Name", 
     Total_population = "Population", 
     sum_score_decile = "Distancing score",
-    overcrowded_rate = "overcrowded (%)")  %>%
+    overcrowded_rate = "Overcrowded (%)")  %>%
   tab_options(container.height = 400)
 ```
 
@@ -592,7 +592,7 @@ aberdeenshire %>%
     DZname = "Name", 
     Total_population = "Population", 
     sum_score_decile = "Distancing score",
-    overcrowded_rate = "overcrowded (%)")  %>%
+    overcrowded_rate = "Overcrowded (%)")  %>%
   tab_options(container.height = 400)
 ```
 
@@ -632,7 +632,7 @@ moray %>%
     DZname = "Name", 
     Total_population = "Population", 
     sum_score_decile = "Distancing score",
-    overcrowded_rate = "overcrowded (%)")  %>%
+    overcrowded_rate = "Overcrowded (%)")  %>%
   tab_options(container.height = 400)
 ```
 
