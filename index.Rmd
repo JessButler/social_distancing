@@ -1,5 +1,5 @@
 ---
-title: "Social Distancing in Aberdeen"
+title: "Social Distancing in Grampian"
 
 output:
   flexdashboard::flex_dashboard:
@@ -31,7 +31,11 @@ datazone_sf <- st_read(here("data", "sc_dz_11.shp"), quiet = T)
 occupations <- read_csv(here("data", "SNS Data Zone 2011 blk", "QS605SC.csv")) %>%
   clean_names()
 
-#add columns with all occupations as percentages
+```
+
+
+```{r}
+#add variables with all occupations as percentages of total datazone population
 occupations <-
 occupations %>%
   mutate(
@@ -40,17 +44,14 @@ occupations %>%
       ~ .x/all_people_aged_16_to_74_in_employment *100, 
       .names = "perc_{col}"))
 
-```
+#join SIMD files and occupations 
 
+simd <- 
+  left_join(simd_indicators, simd_zones, by = c("Data_Zone" = "DZ")) %>%
+  left_join(., occupations, by = c("Data_Zone" = "x1"))
 
-```{r}
-#join SIMD files
-#remove "%" and "*" and make numeric
-
-simd <- full_join(simd_indicators, simd_zones, by = c("Data_Zone" = "DZ"))
-
-simd <- full_join(simd, occupations, by = c("Data_Zone" = "x1"))
-
+#remove "%" and "*"
+#occupations are charachter fields after joining - why?
 simd <- 
 simd %>%
   mutate(across(everything(), ~ str_remove_all(., "%")),
@@ -59,26 +60,25 @@ simd %>%
          across(SIMD2020v2_Rank:Working_Age_Population, ~ as.numeric(.)),
          across(all_people_aged_16_to_74_in_employment:perc_u_activities_of_extraterritorial_organisations_and_bodies, ~ as.numeric(.)))
 
+#calculate population density
 datazone_sf <-
 datazone_sf %>% mutate(pop_per_km2 = TotPop2011/StdAreaKm2, 0)
 
-#adds population density back in simd file from the shapefile
+#adds population density back to simd file from the shapefile
 simd <-
 datazone_sf %>%
   st_drop_geometry() %>%
   select(DataZone, pop_per_km2) %>%
   left_join(simd, ., by = c("Data_Zone" = "DataZone"))
 
-# create index
-#define essential jobs more narrowly????
+# create grampian specific file and score index
 
 grampian_index <-
 simd %>%
   filter(HBname == "Grampian") %>%
   mutate(
-    perc_essential = perc_c_manufacturing + perc_f_construction + perc_g_wholesale_and_retail_trade_repair_of_motor_vehicles_and_motorcycles + perc_i_accommodation_and_food_service_activities + perc_p_education + perc_q_human_health_and_social_work_activities,
-         perc_working_age = Working_age_population/Total_population * 100) %>%
-  select(Data_Zone, DZname, Council_area, Total_population, perc_working_age, SIMD2020v2_Rank, SIMD2020v2_Decile, overcrowded_rate, pop_per_km2, perc_essential)
+    perc_essential = perc_c_manufacturing + perc_f_construction + perc_g_wholesale_and_retail_trade_repair_of_motor_vehicles_and_motorcycles + perc_i_accommodation_and_food_service_activities + perc_p_education + perc_q_human_health_and_social_work_activities) %>%
+  select(Data_Zone, DZname, Council_area, Total_population, SIMD2020v2_Rank, SIMD2020v2_Decile, overcrowded_rate, pop_per_km2, perc_essential)
 
 grampian_index <-
 grampian_index %>%
@@ -99,8 +99,8 @@ grampian_index %>%
 
 
 ```{r}
-#select Aberdeen City areas' data 
-#join to shapefile
+#select Aberdeen City, Aberdeenshire and Moray's data 
+#join to make separate shapefiles
 
 aberdeen <-
   grampian_index %>%
@@ -111,7 +111,31 @@ aberdeen_data_zones <- pull(aberdeen, Data_Zone)
 aberdeen_sf <- filter(datazone_sf, DataZone %in% aberdeen_data_zones)
 
 aberdeen_sf <-
-  merge(aberdeen_sf, aberdeen, by.x = "DataZone", by.y = "Data_Zone")
+  left_join(aberdeen_sf, aberdeen, by = c("DataZone" = "Data_Zone"))
+
+
+aberdeenshire <-
+  grampian_index %>%
+  filter(Council_area == "Aberdeenshire")
+
+aberdeenshire_data_zones <- pull(aberdeenshire, Data_Zone)
+
+aberdeenshire_sf <- filter(datazone_sf, DataZone %in% aberdeenshire_data_zones)
+
+aberdeenshire_sf <-
+  left_join(aberdeenshire_sf, aberdeenshire, by = c("DataZone" = "Data_Zone"))
+
+
+moray <-
+  grampian_index %>%
+  filter(Council_area == "Moray")
+
+moray_data_zones <- pull(moray, Data_Zone)
+
+moray_sf <- filter(datazone_sf, DataZone %in% moray_data_zones)
+
+moray_sf <-
+  left_join(moray_sf, moray, by = c("DataZone" = "Data_Zone"))
 
 ```
 
@@ -123,7 +147,7 @@ Social Distancing Score
 Row
 -------------------------------------
 
-###
+### 
 
 ```{r}
 aberdeen_sf %>%
@@ -148,8 +172,8 @@ aberdeen %>%
   arrange(desc(sum_percentile_score)) %>%
   gt() %>%
   tab_header(
-    title = "Areas with least ability to social distance", 
-    subtitle = "Data zones scoring in the top 10% for difficulty social distancing") %>%
+    title = "Aberdeen areas with least ability to social distance", 
+    subtitle = "Data zones scoring in the top 10% of Grampian for difficulty social distancing") %>%
   cols_label(
     Data_Zone = "Data Zone",
     DZname = "Name", 
@@ -159,21 +183,85 @@ aberdeen %>%
   tab_options(container.height = 400)
 ```
 
+
 Row
 -------------------------------------
 
-### Methods 
+### 
 
-The Social Distancing Score ranks the regions in Aberdeen where people will find it most difficult to socially distance. 
+```{r}
+aberdeenshire_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "sum_score_decile", 
+    label = aberdeenshire_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
 
-The Social Distancing Score uses three measures: percent of working people employed in essential occupations, percent of people living in overcrowded homes, and high local population density. 
 
-Aberdeen is divided into 283 areas (called data zones) of roughly equal population. Each area in Aberdeen has been given a score of 1 to 10 based on the populations' essential occupations, overcrowding, and population density. 
+###
 
-Essential occupations were defined as: manufacturing, construction, wholesale and retail trade, accomodation and food services, education, health and social care. 
+```{r}
+#areas with highest scores
 
-For each measure, data zones were scored using their percentile rank in Aberdeen. The total score was then the decile of the summed percentiles. All scores are given in the Scores tab here. All raw data and code for calculating measures are given in the Sources tab here. 
+aberdeenshire %>%
+  select(Data_Zone, DZname, Total_population, sum_score_decile, sum_percentile_score) %>%
+  filter(sum_score_decile == 10) %>%
+  arrange(desc(sum_percentile_score)) %>%
+  gt() %>%
+  tab_header(
+    title = "Aberdeenshire areas with least ability to social distance", 
+    subtitle = "Data zones scoring in the top 10% of Grampian for difficulty social distancing") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    sum_percentile_score = "Total points")  %>%
+  tab_options(container.height = 400)
+```
 
+
+Row
+-------------------------------------
+
+### 
+
+```{r}
+moray_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "sum_score_decile", 
+    label = moray_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with highest scores
+
+moray %>%
+  select(Data_Zone, DZname, Total_population, sum_score_decile, sum_percentile_score) %>%
+  filter(sum_score_decile == 10) %>%
+  arrange(desc(sum_percentile_score)) %>%
+  gt() %>%
+  tab_header(
+    title = "Moray areas with least ability to social distance", 
+    subtitle = "Data zones scoring in the top 10% of Grampian for difficulty social distancing") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    sum_percentile_score = "Total points")  %>%
+  tab_options(container.height = 400)
+```
 
 Essential Jobs
 =====================================
@@ -207,7 +295,7 @@ aberdeen %>%
   gt() %>%
   fmt_number(columns = vars(perc_essential), decimals = 0) %>%
   tab_header(
-    title = "Areas with most people in essential occupations", 
+    title = "Aberdeen areas with most people in essential occupations", 
     subtitle = "Data zones with at least 65% of population in essential occupations") %>%
   cols_label(
     Data_Zone = "Data Zone",
@@ -218,6 +306,87 @@ aberdeen %>%
   tab_options(container.height = 400)
 ```
 
+
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeenshire_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "perc_essential", 
+    label = aberdeenshire_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people in essential occupations
+
+aberdeenshire %>%
+  select(Data_Zone, DZname, Total_population, perc_essential, sum_score_decile) %>%
+  filter(perc_essential >= 65) %>%
+  arrange(desc(perc_essential)) %>%
+  gt() %>%
+  fmt_number(columns = vars(perc_essential), decimals = 0) %>%
+  tab_header(
+    title = "Aberdeenshire areas with most people in essential occupations", 
+    subtitle = "Data zones with at least 65% of population in essential occupations") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    perc_essential = "Essential workers (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+moray_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "perc_essential", 
+    label = moray_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people in essential occupations
+
+moray %>%
+  select(Data_Zone, DZname, Total_population, perc_essential, sum_score_decile) %>%
+  filter(perc_essential >= 65) %>%
+  arrange(desc(perc_essential)) %>%
+  gt() %>%
+  fmt_number(columns = vars(perc_essential), decimals = 0) %>%
+  tab_header(
+    title = "Moray areas with most people in essential occupations", 
+    subtitle = "Data zones with at least 65% of population in essential occupations") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    perc_essential = "Essential workers (%)")  %>%
+  tab_options(container.height = 400)
+```
 
 Densest Areas
 =====================================
@@ -253,6 +422,86 @@ aberdeen %>%
   tab_header(
     title = "Areas with most people per km2", 
     subtitle = "Data zones with at least 10,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    pop_per_km2 = "People/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeenshire_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = aberdeenshire_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+aberdeenshire %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
+  filter(pop_per_km2 >= 6000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Aberdeenshire areas with most people per km2", 
+    subtitle = "Data zones with at least 6,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    pop_per_km2 = "People/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+moray_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = moray_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+moray %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
+  filter(pop_per_km2 >= 6000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Moray areas with most people per km2", 
+    subtitle = "Data zones with at least 6,000/km2") %>%
   cols_label(
     Data_Zone = "Data Zone",
     DZname = "Name", 
@@ -306,6 +555,117 @@ aberdeen %>%
   tab_options(container.height = 400)
 ```
 
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeenshire_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "overcrowded_rate", 
+    label = aberdeenshire_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people living in overcrowded homes
+
+aberdeenshire %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, sum_score_decile) %>%
+  filter(overcrowded_rate >= 20) %>%
+  arrange(desc(overcrowded_rate)) %>%
+  gt() %>%
+  fmt_number(columns = vars(overcrowded_rate), decimals = 0) %>%
+  tab_header(
+    title = "Aberdeenshire with most people living in overcrowded homes", 
+    subtitle = "Data zones with at least 20% people in overcrowded homes") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    overcrowded_rate = "overcrowded (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+moray_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "overcrowded_rate", 
+    label = moray_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people living in overcrowded homes
+
+moray %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, sum_score_decile) %>%
+  filter(overcrowded_rate >= 15) %>%
+  arrange(desc(overcrowded_rate)) %>%
+  gt() %>%
+  fmt_number(columns = vars(overcrowded_rate), decimals = 0) %>%
+  tab_header(
+    title = "Moray areas with most people living in overcrowded homes", 
+    subtitle = "Data zones with at least 15% people in overcrowded homes") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    overcrowded_rate = "overcrowded (%)")  %>%
+  tab_options(container.height = 400)
+```
+
+
+Methods
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+The Social Distancing Score ranks the regions in Grampian where people will find it most difficult to socially distance. 
+
+The Social Distancing Score is made from three measures: 
+
+- percent of working people employed in essential occupations 
+- percent of people living in overcrowded homes 
+- local population density (per km2) 
+
+Essential occupations were those in manufacturing, construction, wholesale and retail trade, accommodation and food services, education, health and social care. These values were taken from the 2011 census. (see Sources tab)
+
+Overcrowding and population density were taken from the 2020 Scottish Index of Multiple Deprivation. (See Sources tab)
+
+The Scottish Government divides the country into 7000 areas of roughly equal population (called data zones). For this analysis, each data zone's values on the three measures were ranked by percentile relative to the other Grampian data zones. The three percentiles were summed to give a score out of 300 - shown as the Total Points field in the tables. The Social Distancing Score is defined as the decile of the the Total Points Score. The higher the score, the less likely the population will be able to socially distance.
+
+For example data zone S01006645 on George Street was in the 88th percentile for overcrowding, the 100th percentile for population density, and the 88th percentile for essential occupations, giving 276 Total Points. This put it in the top decile of scores for Grampian, so it has a Social Distancing Index of 10.
+
+Raw values for the three measures, percentiles, and scores are given for every data zone in the Scores tab. 
+
+All data and code for calculating measures are given in the Sources tab.
+
+
 Scores
 =====================================
 
@@ -318,13 +678,25 @@ Row
 ```{r}
 #scores table
 
-aberdeen %>%
-  select(Data_Zone, DZname, Total_population, overcrowded_rate, percentile_overcrowded, pop_per_km2, percentile_density, perc_essential, percentile_essential, sum_score_decile, sum_percentile_score, SIMD2020v2_Decile) %>%
+grampian_index %>%
+  select(Data_Zone, DZname, Total_population, overcrowded_rate, percentile_overcrowded, pop_per_km2, percentile_density, perc_essential, percentile_essential, sum_percentile_score, sum_score_decile, SIMD2020v2_Decile) %>%
   arrange(desc(sum_percentile_score)) %>%
-  clean_names() %>%
   gt() %>%
   fmt_number(columns = vars(pop_per_km2, perc_essential), decimals = 0) %>%
-  tab_options(container.height = 400)
+  tab_options(container.height = 400) %>%
+   cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population",
+    overcrowded_rate = "Overcrowded (%)",
+    percentile_overcrowded = "Overcrowded percentile",
+    pop_per_km2 = "Population/km2",
+    percentile_density = "Pop density percentile",
+    perc_essential = "Essential workers (%)",
+    percentile_essential = "Essential percentile",
+    sum_percentile_score = "Total points",
+    sum_score_decile = "Distancing score",
+    SIMD2020v2_Decile = "SIMD decile") 
 ```
 
 
