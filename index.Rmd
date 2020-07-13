@@ -152,7 +152,7 @@ Row
 
 ### 
 
-This **Social Distancing Score** finds the neighbourhoods in Grampian where people will find it most difficult to socially distance. 
+This **Social Distancing Score** finds the neighbourhoods in Grampian where it is the most difficult to socially distance. 
 
 The score combines three measures: 
 
