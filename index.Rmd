@@ -16,6 +16,9 @@ library(flexdashboard)
 library(mapview)
 library(gt)
 library(kableExtra)
+library(cowplot)
+library(plotly)
+theme_set(theme_cowplot())
 ```
 
 
@@ -62,7 +65,7 @@ simd %>%
 
 #calculate population density
 datazone_sf <-
-datazone_sf %>% mutate(pop_per_km2 = TotPop2011/StdAreaKm2, 0)
+datazone_sf %>% mutate(pop_per_km2 = TotPop2011/StdAreaKm2)
 
 #adds population density back to simd file from the shapefile
 simd <-
@@ -80,12 +83,12 @@ simd %>%
     perc_essential = perc_c_manufacturing + perc_f_construction + perc_g_wholesale_and_retail_trade_repair_of_motor_vehicles_and_motorcycles + perc_i_accommodation_and_food_service_activities + perc_p_education + perc_q_human_health_and_social_work_activities) %>%
   select(Data_Zone, DZname, Council_area, Total_population, SIMD2020v2_Rank, SIMD2020v2_Decile, overcrowded_rate, pop_per_km2, perc_essential)
 
-grampian_index <-
-grampian_index %>%
-  mutate(scale_overcrowded = overcrowded_rate/max(overcrowded_rate) *10,
-         scale_density = pop_per_km2/max(pop_per_km2) *10,
-         scale_essential = perc_essential/max(perc_essential) *10,
-         sum_scaled_score = scale_overcrowded + scale_density + scale_essential)
+# grampian_index <-
+# grampian_index %>%
+#   mutate(scale_overcrowded = overcrowded_rate/max(overcrowded_rate) *10,
+#          scale_density = pop_per_km2/max(pop_per_km2) *10,
+#          scale_essential = perc_essential/max(perc_essential) *10,
+#          sum_scaled_score = scale_overcrowded + scale_density + scale_essential)
 
 grampian_index <-
 grampian_index %>%
@@ -143,6 +146,22 @@ moray_sf <-
 
 Social Distancing Score
 =====================================
+
+Row
+-------------------------------------
+
+### 
+
+This **Social Distancing Score** finds the neighbourhoods in Grampian where people will find it most difficult to socially distance. 
+
+The score combines three measures: 
+
+- percent of people with essential jobs 
+- percent of people living in overcrowded homes 
+- local population density 
+
+Please click on the maps, scroll through the tables, and see the tabs above for more detail. 
+
 
 Row
 -------------------------------------
@@ -388,128 +407,6 @@ moray %>%
   tab_options(container.height = 400)
 ```
 
-Densest Areas
-=====================================
-
-Row
--------------------------------------
-
-###
-
-```{r}
-aberdeen_sf %>%
-  mapview(
-    map.types = "OpenStreetMap",
-    zcol = "pop_per_km2.x", 
-    label = aberdeen_sf$Name,
-    layer.name = "",
-    alpha.regions = 0.8
-    )
-```
-
-
-###
-
-```{r}
-#areas with most people per square kilometer
-
-aberdeen %>%
-  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
-  filter(pop_per_km2 >= 10000) %>%
-  arrange(desc(pop_per_km2)) %>%
-  gt() %>%
-  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
-  tab_header(
-    title = "Aberdeen areas with most people per km2", 
-    subtitle = "Data zones with at least 10,000/km2") %>%
-  cols_label(
-    Data_Zone = "Data Zone",
-    DZname = "Name", 
-    Total_population = "Population", 
-    sum_score_decile = "Distancing score",
-    pop_per_km2 = "People/km2")  %>%
-  tab_options(container.height = 400)
-```
-
-Row
--------------------------------------
-
-###
-
-```{r}
-aberdeenshire_sf %>%
-  mapview(
-    map.types = "OpenStreetMap",
-    zcol = "pop_per_km2.x", 
-    label = aberdeenshire_sf$Name,
-    layer.name = "",
-    alpha.regions = 0.8
-    )
-```
-
-
-###
-
-```{r}
-#areas with most people per square kilometer
-
-aberdeenshire %>%
-  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
-  filter(pop_per_km2 >= 6000) %>%
-  arrange(desc(pop_per_km2)) %>%
-  gt() %>%
-  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
-  tab_header(
-    title = "Aberdeenshire areas with most people per km2", 
-    subtitle = "Data zones with at least 6,000/km2") %>%
-  cols_label(
-    Data_Zone = "Data Zone",
-    DZname = "Name", 
-    Total_population = "Population", 
-    sum_score_decile = "Distancing score",
-    pop_per_km2 = "People/km2")  %>%
-  tab_options(container.height = 400)
-```
-
-Row
--------------------------------------
-
-###
-
-```{r}
-moray_sf %>%
-  mapview(
-    map.types = "OpenStreetMap",
-    zcol = "pop_per_km2.x", 
-    label = moray_sf$Name,
-    layer.name = "",
-    alpha.regions = 0.8
-    )
-```
-
-
-###
-
-```{r}
-#areas with most people per square kilometer
-
-moray %>%
-  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
-  filter(pop_per_km2 >= 6000) %>%
-  arrange(desc(pop_per_km2)) %>%
-  gt() %>%
-  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
-  tab_header(
-    title = "Moray areas with most people per km2", 
-    subtitle = "Data zones with at least 6,000/km2") %>%
-  cols_label(
-    Data_Zone = "Data Zone",
-    DZname = "Name", 
-    Total_population = "Population", 
-    sum_score_decile = "Distancing score",
-    pop_per_km2 = "People/km2")  %>%
-  tab_options(container.height = 400)
-```
 
 
 Overcrowded homes
@@ -637,6 +534,158 @@ moray %>%
 ```
 
 
+Densest Areas
+=====================================
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = aberdeen_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+aberdeen %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
+  filter(pop_per_km2 >= 10000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Aberdeen areas with most people per km2", 
+    subtitle = "Data zones with at least 10,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    pop_per_km2 = "People/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeenshire_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = aberdeenshire_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+aberdeenshire %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
+  filter(pop_per_km2 >= 6000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Aberdeenshire areas with most people per km2", 
+    subtitle = "Data zones with at least 6,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    pop_per_km2 = "People/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+moray_sf %>%
+  mapview(
+    map.types = "OpenStreetMap",
+    zcol = "pop_per_km2.x", 
+    label = moray_sf$Name,
+    layer.name = "",
+    alpha.regions = 0.8
+    )
+```
+
+
+###
+
+```{r}
+#areas with most people per square kilometer
+
+moray %>%
+  select(Data_Zone, DZname, Total_population, pop_per_km2, sum_score_decile) %>%
+  filter(pop_per_km2 >= 6000) %>%
+  arrange(desc(pop_per_km2)) %>%
+  gt() %>%
+  fmt_number(columns = vars(pop_per_km2), decimals = 0) %>%
+  tab_header(
+    title = "Moray areas with most people per km2", 
+    subtitle = "Data zones with at least 6,000/km2") %>%
+  cols_label(
+    Data_Zone = "Data Zone",
+    DZname = "Name", 
+    Total_population = "Population", 
+    sum_score_decile = "Distancing score",
+    pop_per_km2 = "People/km2")  %>%
+  tab_options(container.height = 400)
+```
+
+
+Index of Deprivation
+=====================================
+
+Row
+-------------------------------------
+
+###
+An area's Social Distancing Score doesn't always correlate to its Scottish Index of Multiple Deprivation value. This is especially true in areas with less deprivation, some of which will have a difficult time social distancing (top left of the figure). 
+
+Areas with high deprivation do tend to also have a difficult time socially distancing (top right of the figure)
+
+Row {data-height = 450}
+-------------------------------------
+###
+
+**Hover or click points to see area name**
+```{r}
+p <-
+ggplot(data = grampian_index, aes(x = SIMD2020v2_Rank, y = sum_score_decile, label = DZname)) +
+  geom_jitter(alpha = 0.5) +
+  scale_x_reverse() +
+  labs(x = "Scottish Index of Multiple Deprivation Rank", y = "Social Distancing Score")
+
+ggplotly(p, tooltip = "label", width = 700, height = 400)
+```
+
+
+
 Methods
 =====================================
 
@@ -645,25 +694,27 @@ Row
 
 ###
 
-The Social Distancing Score ranks the regions in Grampian where people will find it most difficult to socially distance. 
+This **Social Distancing Score** finds the neighbourhoods in Grampian where people will find it most difficult to socially distance. 
 
-The Social Distancing Score is made from three measures: 
+The score combines three measures: 
 
-- percent of working people employed in essential occupations 
+- percent of people with essential jobs 
 - percent of people living in overcrowded homes 
-- local population density (per km2) 
+- local population density  
+
+The Scottish Government divides the country into 7000 areas of roughly equal population (called data zones). For this analysis, each data zone's values on the three measures above were ranked by percentile in Grampian. The three percentiles were summed to a Total Points score out of 300.
+
+For example, data zone S01006645 on George Street was in the 88th percentile for overcrowding, the 100th percentile for population density, and the 88th percentile for essential occupations, giving 276 Total Points. 
+
+The Social Distancing Score is the decile of the area's Total Points. Data zone S01006645 on George Street's Total Points score of 276 puts it in the top 10% of all areas in Grampian - giving it a Social Distancing Score of 10.
+
+The higher the score, the less likely the population will be able to socially distance.
 
 Essential occupations were those in manufacturing, construction, wholesale and retail trade, accommodation and food services, education, health and social care. These values were taken from the 2011 census. (see Sources tab)
 
-Overcrowding and population density were taken from the 2020 Scottish Index of Multiple Deprivation. (See Sources tab)
+Overcrowding, population density and index of multiple deprivation decile were taken from the 2020 Scottish Index of Multiple Deprivation. (See Sources tab)
 
-The Scottish Government divides the country into 7000 areas of roughly equal population (called data zones). For this analysis, each data zone's values on the three measures were ranked by percentile relative to the other Grampian data zones. The three percentiles were summed to give a score out of 300 - shown as the Total Points field in the tables. The Social Distancing Score is defined as the decile of the the Total Points Score. The higher the score, the less likely the population will be able to socially distance.
-
-For example data zone S01006645 on George Street was in the 88th percentile for overcrowding, the 100th percentile for population density, and the 88th percentile for essential occupations, giving 276 Total Points. This put it in the top decile of scores for Grampian, so it has a Social Distancing Index of 10.
-
-Raw values for the three measures, percentiles, and scores are given for every data zone in the Scores tab. 
-
-All data and code for calculating measures are given in the Sources tab.
+Raw values for the three measures, percentiles, and scores are given for every data zone in the Scores tab. All data and code for calculating measures are given in the Sources tab.
 
 
 Scores
